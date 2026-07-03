@@ -1,0 +1,12 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+*.log
+*.egg-info/
+exports/
+accounts.json
+tokens.txt
+bot.py
+.DS_Store

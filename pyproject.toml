@@ -1,0 +1,19 @@
+[project]
+name = "auto-freecf"
+version = "1.0.0"
+description = "Cloudflare Workers AI Account ID and token manager with explicit automation modes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "mocasus" }]
+dependencies = [
+  "httpx>=0.27.0",
+  "curl_cffi>=0.7.0",
+  "beautifulsoup4>=4.12.0",
+]
+
+[project.scripts]
+auto-freecf = "auto_freecf.cli:main"
+
+[tool.setuptools]
+packages = ["auto_freecf"]
