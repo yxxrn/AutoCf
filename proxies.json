@@ -1,0 +1,82 @@
+[
+  {
+    "server": "http://31.59.20.176:6754",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "GB",
+    "city": "London",
+    "valid": true
+  },
+  {
+    "server": "http://31.56.127.193:7684",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "US",
+    "city": "Seattle",
+    "valid": true
+  },
+  {
+    "server": "http://45.38.107.97:6014",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "GB",
+    "city": "London",
+    "valid": true
+  },
+  {
+    "server": "http://38.154.203.95:5863",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "US",
+    "city": "Piscataway",
+    "valid": true
+  },
+  {
+    "server": "http://198.105.121.200:6462",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "GB",
+    "city": "London",
+    "valid": true
+  },
+  {
+    "server": "http://64.137.96.74:6641",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "ES",
+    "city": "Madrid",
+    "valid": true
+  },
+  {
+    "server": "http://198.23.243.226:6361",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "US",
+    "city": "Los Angeles",
+    "valid": true
+  },
+  {
+    "server": "http://38.154.185.97:6370",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "US",
+    "city": "Piscataway",
+    "valid": true
+  },
+  {
+    "server": "http://142.111.67.146:5611",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "JP",
+    "city": "Tokyo",
+    "valid": true
+  },
+  {
+    "server": "http://191.96.254.138:6185",
+    "username": "vdckvpsz",
+    "password": "fel1mkul9ew2",
+    "country": "US",
+    "city": "Los Angeles",
+    "valid": true
+  }
+]
