@@ -98,7 +98,7 @@ class EmailGenerator:
                 self._active_url = url
                 self._tier_used = tier
                 if tier != "primary":
-                    print(f"  ⚠️  Using {tier} relay: {url}")
+                    print(f"  [warn] Using {tier} relay: {url}")
                 return result
             except httpx.ConnectError as e:
                 errors.append(f"{tier} ({url}): connection refused")

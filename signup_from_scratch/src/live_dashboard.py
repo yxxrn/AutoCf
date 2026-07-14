@@ -132,11 +132,11 @@ class LiveDashboard:
             table = Table.grid(expand=True)
             table.add_column(ratio=1)
             table.add_row(
-                f"[bold cyan]☁️ Cloudflare Auto Signup v1 — LIVE[/bold cyan]  "
+                f"[bold cyan][cf] Cloudflare Auto Signup v1 — LIVE[/bold cyan]  "
                 f"[magenta]Elapsed: {elapsed}s[/magenta]\n"
                 f"Overall [{_bar(pct)}] {pct}%  "
-                f"[green]✔ {self.state.succeeded}[/green]  "
-                f"[red]✘ {self.state.failed}[/red]  "
+                f"[green][ok] {self.state.succeeded}[/green]  "
+                f"[red][err] {self.state.failed}[/red]  "
                 f"({self.state.completed}/{self.state.total})"
             )
 

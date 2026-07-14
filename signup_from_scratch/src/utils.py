@@ -83,6 +83,6 @@ def format_account(result: dict) -> str:
     email = result.get("email", "unknown")
     account_id = result.get("account_id", "N/A")[:16]
     token = result.get("api_token", "N/A")
-    valid = "✅" if result.get("token_valid") else "❌"
+    valid = "[ok]" if result.get("token_valid") else "[err]"
     token_preview = f"{token[:20]}..." if token.startswith("cfut_") else "N/A"
     return f"  {email} | {account_id}... | {token_preview} | {valid}"

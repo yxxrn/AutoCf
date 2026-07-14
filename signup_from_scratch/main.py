@@ -12,7 +12,6 @@ Automates the full pipeline:
 Usage:
     python main.py                          # Create 1 account
     python main.py --accounts 5             # Create 5 accounts
-    python main.py --fast                   # Skip Turnstile solve (submit-first)
     python main.py --proxy http://user:pass@host:port
     python main.py --config custom.json
     python main.py --validate-only --token cfut_xxx --account-id xxx
@@ -20,18 +19,14 @@ Usage:
 Requirements:
     - Python 3.10+
     - Google Chrome installed
-    - nodriver, opencv-python-headless, httpx, Pillow, rich
+    - nodriver, httpx, rich (see requirements.txt)
     - Works on Windows, Linux, macOS
 """
 
 import argparse
 import asyncio
-import json
-import os
 import random
 import sys
-import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import nodriver as uc
@@ -52,7 +47,6 @@ from src.utils import (
     save_result,
     load_results,
     timestamp,
-    wait_with_progress,
     format_account,
 )
 
@@ -100,20 +94,12 @@ def parse_args():
         help="Number of concurrent account workers (default: 1; use carefully with proxies)"
     )
     parser.add_argument(
-        "--mail-api", type=str, default=None,
-        help="Mail API URL override (e.g. https://relay.example.com/new_address)"
-    )
-    parser.add_argument(
         "--no-dashboard", action="store_true",
         help="Disable Rich live dashboard even when rich is installed"
     )
     parser.add_argument(
         "--export-txt", type=str, default=None,
         help="Export valid results to a 9Router-friendly .txt file after the run"
-    )
-    parser.add_argument(
-        "--fast", action="store_true",
-        help="Submit-first mode: quick Turnstile interaction, submit immediately, retry only if blocked"
     )
     return parser.parse_args()
 
@@ -123,7 +109,6 @@ async def create_account(
     proxy: str = None,
     headless: bool = False,
     browser: uc.Browser = None,
-    fast: bool = False,
 ) -> dict:
     """
     Create a single Cloudflare account with API token.
@@ -136,10 +121,14 @@ async def create_account(
     domain = random.choice(config["mail_domains"])
     password = generate_password()
     token_name = config.get("token_name", "workers-ai-auto")
-    mail_api = config.get("mail_api", "https://convergence-lobby-portal-planes.trycloudflare.com/new_address")
+    mail_api = config["mail_api"]
 
-    # Create temp email
-    email_gen = EmailGenerator(mail_api, config["mail_domains"], fallback_url=config.get("mail_fallback"))
+    # Create temp email (primary → mail_fallback → PUBLIC_RELAY)
+    email_gen = EmailGenerator(
+        mail_api,
+        config["mail_domains"],
+        fallback_url=config.get("mail_fallback") or None,
+    )
     try:
         mail = email_gen.create(username=username, domain=domain)
         email = mail["email"]
@@ -148,29 +137,30 @@ async def create_account(
     finally:
         email_gen.close()
 
-    print(f"  📧 {email}")
+    print(f"  [email] {email}")
 
     # Use provided browser or create new one
     own_browser = False
     if browser is None:
+        from src.stealth import USER_AGENTS
+        browser_args = [
+            f"--user-agent={random.choice(USER_AGENTS)}",
+            "--disable-blink-features=AutomationControlled",
+        ]
         browser = await uc.start(
             headless=headless,
             lang="en-US",
             proxy=proxy,
             sandbox=False,  # required when running as root in VPS/Xvfb
+            browser_args=browser_args,
         )
         own_browser = True
 
     try:
-        # Phase 0: Navigate to signup
-        print("  [0/4] Pre-flight check...")
-        page = await browser.get("https://dash.cloudflare.com/sign-up")
-        await asyncio.sleep(8)
-        print("    ✅ Page ready")
-            
         # Phase 1: Signup
         print("  [1/4] Signing up...")
-        signup_result = await signup(page, email, password, retry_turnstile=not fast)
+        page = await browser.get("https://dash.cloudflare.com/sign-up")
+        signup_result = await signup(page, email, password, proxy=proxy)
 
         if not signup_result.success:
             return {
@@ -181,10 +171,9 @@ async def create_account(
             }
 
         account_id = signup_result.account_id
-        print(f"  🆔 Account ID: {account_id}")
+        print(f"  [account_id] {account_id}")
 
         # Verify Cloudflare email from temp inbox before token creation.
-        # Cloudflare rejects final token creation for fresh direct-signup accounts otherwise.
         print("  [2/4] Verifying Cloudflare email...")
         verify_result = await verify_cloudflare_email(
             page,
@@ -194,29 +183,27 @@ async def create_account(
             poll_interval=config.get("email_verify_poll_interval", 5),
         )
         if verify_result.success:
-            print("  ✅ Email verified")
+            print("  [email] verified")
         else:
-            print(f"  ⚠️ Email verification failed: {verify_result.error}")
+            print(f"  [email] verification failed: {verify_result.error}")
 
         # Phase 2: Token creation — reuse same browser session.
-        # After email verification, the direct dashboard API is the most stable path;
-        # keep the UI flow as fallback/debug for unverified or API-blocked cases.
         print("  [3/4] Creating API token...")
         if verify_result.success:
             token_result = await create_token_api(page, account_id, token_name)
             if not token_result.success:
-                print(f"  ⚠️ API token creation failed after verify: {token_result.error}; trying UI fallback")
+                print(f"  [token] API failed: {token_result.error}; trying UI fallback")
                 token_result = await create_token(page, account_id, token_name)
         else:
             token_result = await create_token(page, account_id, token_name)
 
         api_token = token_result.token if token_result.success else ""
         if api_token:
-            print(f"  🔑 Token: {api_token[:30]}...")
+            print(f"  [token] {api_token[:30]}...")
         else:
-            print(f"  ⚠️ Token creation failed: {token_result.error}")
+            print(f"  [token] creation failed: {token_result.error}")
 
-        # Phase 3: Validation (even without token, save the account)
+        # Phase 3: Validation
         token_valid = False
         model_count = 0
         if api_token:
@@ -225,9 +212,9 @@ async def create_account(
             token_valid = validation.valid
             model_count = validation.workers_ai_models
             if token_valid:
-                print(f"  ✅ Valid! {model_count} Workers AI models available")
+                print(f"  [valid] {model_count} Workers AI models available")
             else:
-                print(f"  ❌ Validation failed: {validation.error}")
+                print(f"  [valid] failed: {validation.error}")
         else:
             print("  [4/4] Skipping validation (no token)")
 
@@ -253,7 +240,7 @@ async def create_account(
             "status": "error",
             "email": email,
             "password": password,
-            "error": str(e),
+            "error": f"{type(e).__name__}: {e}",
             "created_at": timestamp(),
         }
     finally:
@@ -262,9 +249,6 @@ async def create_account(
                 browser.stop()
             except Exception:
                 pass
-            # Give nodriver/CDP websocket subprocess a moment to close cleanly before
-            # starting the next account browser. This avoids intermittent
-            # "no close frame received or sent" / "Connection closed" on bulk runs.
             await asyncio.sleep(3)
 
 
@@ -292,8 +276,6 @@ def export_txt(results: list[dict], output_path: str, proxy_pool: str = "None") 
 
 
 async def main():
-    # Ensure cwd is the script's directory (CLI may run from elsewhere)
-    os.chdir(Path(__file__).parent)
     args = parse_args()
 
     # Load config
@@ -304,17 +286,12 @@ async def main():
     num_accounts = args.accounts
     max_retry = args.retry
 
-    # Override mail API from CLI
-    if args.mail_api:
-        config["mail_api"] = args.mail_api
-        print(f"  📧 Mail API override: {args.mail_api}")
-
     # Validate-only mode
     if args.validate_only:
         if not args.token or not args.account_id:
-            print("❌ --validate-only requires --token and --account-id")
+            print("--validate-only requires --token and --account-id")
             sys.exit(1)
-        print("🔍 Validating token...")
+        print("Validating token...")
         result = validate_token(args.token, args.account_id)
         print(f"  Valid: {result.valid}")
         print(f"  Models: {result.workers_ai_models}")
@@ -323,7 +300,7 @@ async def main():
         sys.exit(0 if result.valid else 1)
 
     print("=" * 60)
-    print("☁️  Cloudflare Auto Signup — Workers AI Token Creator")
+    print("Cloudflare Auto Signup -- Workers AI Token Creator")
     print("=" * 60)
     print(f"  Accounts to create: {num_accounts}")
     print(f"  Proxy: {proxy or 'None (direct)'}")
@@ -358,7 +335,6 @@ async def main():
                 config=config,
                 proxy=proxy,
                 headless=args.headless or config.get("headless", False),
-                fast=args.fast,
             )
             if result.get("email"):
                 dashboard_state.update(worker_id, "validate", result.get("status", "done"), email=result["email"], index=index)
@@ -367,7 +343,6 @@ async def main():
                 success = True
                 break
             if result.get("status") == "signup_only":
-                # Account created but no token — still save for forensic/debug visibility.
                 success = True
                 break
             if any(
@@ -376,13 +351,6 @@ async def main():
             ):
                 dashboard_state.update(worker_id, "failed", "Transient issue; retry cooldown", email=result.get("email", ""), index=index)
                 await asyncio.sleep(delay)
-
-            if any(
-                marker in str(result.get("error", "")).lower()
-                for marker in ("all mail relays failed", "connection refused", "connectionerror")
-            ):
-                # Network/config issue — retrying won't fix this
-                break
             else:
                 break
 
@@ -397,7 +365,7 @@ async def main():
     async def worker(worker_id: int):
         while not queue.empty():
             index = await queue.get()
-            print(f"\n{'─' * 50}\n  Account {index}/{num_accounts} (Worker {worker_id})\n{'─' * 50}")
+            print(f"\n{'-' * 50}\n  Account {index}/{num_accounts} (Worker {worker_id})\n{'=' * 50}")
             try:
                 await run_one(worker_id, index)
             finally:
@@ -419,11 +387,11 @@ async def main():
 
     # Final summary
     print(f"\n{'=' * 60}")
-    print(f"📊 Results: {created} created, {failed} failed")
-    print(f"💾 Saved to: {output_file}")
+    print(f"Results: {created} created, {failed} failed")
+    print(f"Saved to: {output_file}")
     if args.export_txt:
         exported = export_txt(results, args.export_txt, proxy_pool=("None" if not proxy else "configured-proxy"))
-        print(f"🧩 9Router TXT export: {args.export_txt} ({exported} valid keys)")
+        print(f"9Router TXT export: {args.export_txt} ({exported} valid keys)")
     if run_results:
         print(f"\nAccounts:")
         for r in run_results:

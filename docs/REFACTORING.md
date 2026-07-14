@@ -1,5 +1,10 @@
 # Refactoring Summary
 
+> **Historical (legacy login stack).**  
+> Dokumen ini mendeskripsikan pemecahan `browser_bot.py` monolitik → `src/` untuk **login grabber**.  
+> Pipeline aktif saat ini: `signup_from_scratch/` + `mail-adapter/` — lihat root `AGENTS.md` dan `signup_from_scratch/README.md`.  
+> Folder `config/` yang disebut di bawah mungkin tidak ada di tree terkini; proxy configs di-gitignore.
+
 ## Changes Made
 
 ### 1. Project Structure Reorganization

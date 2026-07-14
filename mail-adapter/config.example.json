@@ -1,12 +1,13 @@
 {
     "temp_mail": {
         "provider": "supabase",
-        "api_base": "https://ijrccpgiulrmfpavazsl.supabase.co/functions/v1/temp-mail-api",
-        "api_key": "tmk_594e0736e6d9de7d60eb1afceae0adddb651f37cadf6277b60a8255ef8edb982",
-        "domains": ["moymoy.me", "moyqris.me", "kintole.com", "gmilio.web.id"]
+        "api_base": "https://YOUR_PROJECT.supabase.co/functions/v1/temp-mail-api",
+        "api_key": "YOUR_TEMP_MAIL_API_KEY",
+        "domains": ["example.com"]
     },
     "server": {
         "port": 9877,
-        "host": "0.0.0.0"
-    }
+        "host": "127.0.0.1"
+    },
+    "_note": "adapter.py currently reads API_BASE / TMK_KEY from env (or built-in defaults). Prefer: set TMK_KEY and API_BASE env vars; do not commit real keys."
 }

@@ -6,7 +6,7 @@
 
 ### Cloudflare Workers AI Account ID & Token Auto-Grabber
 
-<img alt="Version" src="https://img.shields.io/badge/version-v4.0.0-5865F2?style=flat-square">
+<img alt="Version" src="https://img.shields.io/badge/version-v4.3.1-5865F2?style=flat-square">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square">
 <img alt="Node" src="https://img.shields.io/badge/node-%3E=18.0.0-339933?style=flat-square">
 <img alt="Python" src="https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square">
@@ -46,31 +46,33 @@ moycf
 
 ```
 Auto-FreeCF/
-├── src/                    # Core source code (login flow)
-│   ├── __init__.py
-│   ├── browser_bot.py      # Main browser automation logic
-│   ├── turnstile_solver.py # Turnstile challenge solver
-│   └── utils.py            # Utility functions
-├── signup_from_scratch/    # 🔥 NEW: Auto signup from zero
+├── signup_from_scratch/    # ★ ACTIVE: signup from zero → Workers AI token
 │   ├── main.py             # Orchestrator
+│   ├── tests/              # Unit tests (proxy parser, no browser)
 │   ├── src/
-│   │   ├── signup_flow.py      # CF signup with Turnstile
-│   │   ├── email_verifier.py   # Email verification
-│   │   ├── email_generator.py  # Temp-mail creation
-│   │   ├── token_creator.py    # API token creation
-│   │   ├── token_validator.py  # Token validation
-│   │   ├── turnstile_bypass.py # Advanced Turnstile solver
+│   │   ├── signup_flow.py      # CF signup + Turnstile (nodriver verify_cf)
+│   │   ├── turnstile_bypass.py # verify_cf + is_turnstile_present only
+│   │   ├── email_generator.py
+│   │   ├── email_verifier.py
+│   │   ├── token_creator.py    # API first (from main), UI fallback
+│   │   ├── token_validator.py
+│   │   ├── humanize.py
+│   │   ├── proxy_manager.py
 │   │   └── utils.py
 │   └── config.example.json
-├── mail-adapter/           # Temp-mail bridge (Supabase API)
+├── mail-adapter/           # Temp-mail bridge (Supabase → local HTTP)
 │   ├── adapter.py
+│   ├── tests/
 │   └── config.example.json
-├── deploy-browserfarm.sh   # VPS deployment script
-├── cli.js                  # CLI entry point
-├── terminal_ui.py          # Terminal UI
-├── web_ui.py               # Web UI
-├── browser_bot.py          # Backward compatibility wrapper
-└── package.json            # NPM package config
+├── src/                    # LEGACY: login grabber (existing accounts)
+│   ├── browser_bot.py
+│   ├── turnstile_solver.py
+│   └── utils.py
+├── cli.js                  # npm CLI (moycf)
+├── browser_bot.py          # Legacy wrapper
+├── web_ui.py / terminal_ui.py
+├── AGENTS.md               # Ops context for agents (source of truth)
+└── package.json
 ```
 
 ## 🚀 Installation
@@ -138,9 +140,11 @@ moycf --signup --accounts 3 --mail-api https://your-relay.example.com/new_addres
 - 🔄 **Auto-fallback** — if primary relay fails, tool auto-tries backup + public relay (zero config needed)
 
 **Full pipeline:**
-1. Temp-mail creation → 2. CF Signup (Turnstile bypass) → 3. Email verify → 4. API token → 5. Validate
+1. Temp-mail → 2. CF Signup (`page.verify_cf()`) → 3. Email verify → 4. API token (API then UI) → 5. Validate
 
-**Output format:** `account_id:workers_ai_token` in `results.json`
+**Output:** JSON objects in `signup_from_scratch/results.json` (`email`, `account_id`, `api_token`, `token_valid`, …).
+
+**Docs:** day-to-day ops → [`AGENTS.md`](AGENTS.md) · pipeline detail → [`signup_from_scratch/README.md`](signup_from_scratch/README.md)
 
 ### VPS Deployment
 
@@ -150,20 +154,31 @@ moycf --signup --accounts 3 --mail-api https://your-relay.example.com/new_addres
 
 ## 🔧 Development
 
-### Project Structure
+### Active vs legacy
 
-- **src/browser_bot.py**: Main CFAutoGrabber class with login, token creation logic
-- **src/turnstile_solver.py**: Turnstile challenge solving (isolated page approach)
-- **src/utils.py**: Helper functions (load_accounts, load_proxy_config, save_results)
-- **signup_from_scratch/**: Standalone signup pipeline (no existing email needed)
-- **mail-adapter/**: Temp-mail API bridge for signup pipeline
-- **browser_bot.py**: Backward compatibility wrapper for existing scripts
+| Area | Path | Notes |
+|------|------|--------|
+| **Active pipeline** | `signup_from_scratch/` + `mail-adapter/` | Signup from zero; maintained |
+| **Legacy login** | `src/browser_bot.py`, `bot.py`, UI wrappers | Existing email:pass grabber |
+| **Agent ops doc** | `AGENTS.md` | Update on every significant pipeline change |
 
-### Running Tests
+Turnstile on the **active** path uses only nodriver `verify_cf()` — not OpenCV / coordinate click.
+
+### Unit tests (no browser)
 
 ```bash
-cd tests
-python test_login.py
+cd signup_from_scratch
+python -m unittest tests.test_proxy_manager -v
+
+cd ../mail-adapter
+python -m unittest tests.test_adapter -v
+```
+
+### Manual / legacy smoke
+
+```bash
+# Legacy login helper (needs credentials)
+python browser_bot.py --help
 ```
 
 ## 🔒 Security

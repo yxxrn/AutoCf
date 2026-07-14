@@ -8,8 +8,8 @@
         ],
         "_cli": "Run moycf, pick Signup [4], then choose mail provider — or pass --mail-api <url>"
     },
-    "mail_api": "https://convergence-lobby-portal-planes.trycloudflare.com/new_address",
-    "mail_fallback": "http://localhost:9877/new_address",
+    "mail_api": "http://localhost:9877/new_address",
+    "mail_fallback": "",
     "mail_domains": [
         "moymoy.me",
         "moyqris.me",
@@ -28,5 +28,9 @@
     "token_expiry": "no-expiration",
     "output_file": "results.json",
     "email_verify_timeout": 120,
-    "email_verify_poll_interval": 5
+    "email_verify_poll_interval": 5,
+    "nav_timeout": 60,
+    "max_proxy_rotations": 10,
+    "verify_settle_seconds": 15,
+    "token_verify_retries": 4
 }

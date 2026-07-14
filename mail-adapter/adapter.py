@@ -194,7 +194,7 @@ class AdapterHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self._read_body()
 
-        if path == "/api/new_address":
+        if path in ("/api/new_address", "/new_address"):
             domain = body.get("domain", "gmilio.web.id")
             try:
                 data = supabase_create(domain)
@@ -242,7 +242,7 @@ class AdapterHandler(BaseHTTPRequestHandler):
             return
 
         # /parsed_mail/<id>
-        if path.startswith("/parsed_mail/"):
+        if path.startswith("/parsed_mail/") or path.startswith("/api/parsed_mail/"):
             ti = self._get_token_info()
             if not ti:
                 self._error("Missing or invalid Authorization", 401)

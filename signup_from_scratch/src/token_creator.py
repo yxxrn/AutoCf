@@ -1,20 +1,16 @@
 """
-Cloudflare API Token Creator — API-first with UI fallback.
+Cloudflare API Token Creator.
 
-Patch source: https://github.com/andreanocalvin/cloudflare-autologin
-Useful extracted parts:
-- POST /api/v4/user/tokens from the authenticated dashboard session
-- Workers AI permission group IDs:
+Permission group IDs (Workers AI):
   - Read:  a92d2450e05d4e7bb7d0a64968f83d11
   - Write: bacc64e0f6c34fc0883a1223f938a104
 
-Why API-first:
-- Cloudflare token creation UI is a React SPA and custom checkboxes are brittle.
-- The API response contains result.value (cfut_...) directly when successful.
+Call order from main.create_account (when email verified):
+  1. create_token_api()  — session POST to /api/v4/user/tokens
+  2. create_token()      — UI on /{account_id}/api-tokens, then API again
 
-Fallback:
-- If API POST is blocked/fails, use /profile/api-tokens UI entry point.
-- UI still requires verified Cloudflare email; if email is unverified, no token is returned.
+If email verify failed, main skips straight to create_token() (UI path).
+UI still requires a verified Cloudflare email for a real cfut_ token.
 """
 
 from __future__ import annotations
@@ -78,7 +74,7 @@ def _loads_wrapped_json(raw: Any, default: Any = None) -> Any:
     if isinstance(unwrapped, (dict, list)):
         return unwrapped
     try:
-        return json.loads(str(unwrapped))
+        return json.loads(str(unwrapped)) if unwrapped else {}
     except Exception:
         return default
 
@@ -178,7 +174,7 @@ async def create_token_api(
     if status != 200:
         snippet = body_text[:500].replace("\n", " ")
         try:
-            err_resp = json.loads(body_text)
+            err_resp = json.loads(body_text) if body_text else {}
             err_messages = " | ".join(
                 str(e.get("message", e)) for e in (err_resp.get("errors") or [])
             )
@@ -209,9 +205,9 @@ async def create_token_api(
         )
 
     try:
-        resp = json.loads(body_text)
+        resp = json.loads(body_text) if body_text else {}
     except Exception:
-        return TokenResult(False, token_name=token_name, error="api_invalid_json", method="api", raw=body_text[:500])
+        return TokenResult(False, token_name=token_name, error="api_invalid_json", method="api", raw=(body_text or "")[:500])
 
     if resp.get("success") and resp.get("result", {}).get("value"):
         return TokenResult(
@@ -403,7 +399,7 @@ async def create_token_ui(
                 await asyncio.sleep(2)
                 focused_after = await _focused_checkbox_state(page)
                 if focused_after.get("ariaChecked") == "true":
-                    print(f"    ✅ Checked permission checkbox at tab #{i}")
+                    print(f"    [ok] Checked permission checkbox at tab #{i}")
                     break
 
     # Review button can be "Review token" or "Continue to summary" depending entry point.
@@ -475,32 +471,28 @@ async def create_token(
     timeout: float = 180,
 ) -> TokenResult:
     """
-    Create Cloudflare Workers AI token.
+    UI-first token helper (used as fallback from main.py).
 
-    User-confirmed bot v1 entry point:
-    1. Open https://dash.cloudflare.com/{account_id}/api-tokens first
-       (this is the Account API Tokens page observed after signup).
-    2. Click the body "Create a token" link/button, or header "+ Create Token".
-    3. It should open https://dash.cloudflare.com/{account_id}/api-tokens/create
-       with Token name, AI & Machine Learning permissions, Review token.
-    4. Fill/select token settings and extract cfut_*.
+    Preferred path in main.create_account when email is verified:
+      create_token_api() first, then this create_token() as fallback.
 
-    /profile/api-tokens and direct API are kept only as fallback/debug paths,
-    not the primary v1 path.
+    This helper itself tries:
+      1. create_token_ui() — dash.cloudflare.com/{account_id}/api-tokens
+      2. create_token_api() — dashboard session POST /api/v4/user/tokens
     """
     ui_result = await create_token_ui(page, account_id=account_id, token_name=token_name, timeout=timeout)
     if ui_result.success:
-        print("    ✅ Token created via /profile/api-tokens UI")
+        print("    [ok] Token created via account API-tokens UI")
         return ui_result
 
-    print(f"    ⚠️ Profile UI token creation failed: {ui_result.error}")
+    print(f"    [warn] Account UI token creation failed: {ui_result.error}")
 
     api_result = await create_token_api(page, account_id=account_id, token_name=token_name)
     if api_result.success:
-        print("    ✅ Token created via API fallback")
+        print("    [ok] Token created via API fallback")
         return api_result
 
-    api_result.error = f"profile_ui={ui_result.error}; api={api_result.error}"
+    api_result.error = f"account_ui={ui_result.error}; api={api_result.error}"
     return api_result
 
 
