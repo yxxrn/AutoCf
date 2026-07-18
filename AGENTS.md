@@ -13,6 +13,13 @@
 5. Jangan commit/push kecuali diminta eksplisit.
 6. Error encoding Windows → selalu set `PYTHONIOENCODING=utf-8` sebelum run.
 
+### Peta dokumentasi
+
+- `AGENTS.md` ini: source of truth untuk operasi dan aturan agent.
+- `docs/PROJECT_GUIDE.md`: handoff arsitektur, kontrak interface, perintah verifikasi, dan gap yang telah diaudit.
+- `signup_from_scratch/README.md`: setup serta referensi CLI pipeline aktif.
+- `docs/REFACTORING.md`: sejarah stack login legacy; jangan dipakai sebagai panduan pipeline aktif.
+
 ---
 
 ## 1. Proyek Overview
@@ -219,6 +226,8 @@ Update dokumen jika ada perubahan pada:
 - Blockers atau status proyek
 - Keputusan teknis baru
 - Dependencies / test layout
+- Kontrak mail adapter atau output result
+- Catatan handoff/known gap yang dapat memengaruhi agent berikutnya
 
 ---
 

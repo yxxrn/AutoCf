@@ -1,64 +1,43 @@
 # Security Policy
 
-## 🔒 Supported Versions
+## Supported scope
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 3.3.x   | ✅ Yes             |
-| < 3.0   | ❌ No              |
+Security fixes and reports are evaluated against the current `main` branch, especially the active `signup_from_scratch/` and `mail-adapter/` pipeline. Historical versions and the legacy login stack may receive compatibility fixes at maintainer discretion; do not rely on the version table in older documentation.
 
-## 🐛 Reporting a Vulnerability
+## Sensitive local state
 
-We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly.
+Never commit, publish, or paste any of the following into issues, logs, screenshots, or documentation:
 
-### How to Report
+- Cloudflare API tokens, account IDs paired with tokens, passwords, or browser session data.
+- Temporary-mail JWTs, owner tokens, message contents, backend API keys, or `mail-adapter/token_map.json`.
+- `config.json`, `results.json`, `keys.txt`, proxy credentials, proxy lists, and runtime logs.
 
-**DO:**
-- 📧 Email: [andikastore.ads@gmail.com](mailto:andikastore.ads@gmail.com)
-- 🔒 Provide detailed information about the vulnerability
-- 📝 Include steps to reproduce if possible
-- ⏰ Allow reasonable time for us to address the issue before public disclosure
+If a secret is exposed, revoke or rotate it with the relevant provider first. Then remove it from accessible artifacts and report the exposure privately.
 
-**DON'T:**
-- ❌ Do NOT open a public GitHub issue for security vulnerabilities
-- ❌ Do NOT exploit the vulnerability
-- ❌ Do NOT share the vulnerability details publicly before it's fixed
+## Reporting a vulnerability
 
-### What to Expect
+Please report suspected vulnerabilities privately to [andikastore.ads@gmail.com](mailto:andikastore.ads@gmail.com). Include:
 
-- **Initial Response**: Within 48 hours
-- **Status Update**: Within 7 days
-- **Resolution Target**: Within 30 days
-- **Public Disclosure**: After fix is released and users have had time to update
+1. A concise description of the impact.
+2. A minimal reproduction that does not contain valid credentials or tokens.
+3. Affected file, component, and revision if known.
+4. Any mitigation already applied, such as token rotation.
 
-### Security Best Practices
+Do not open a public issue containing exploit details, secrets, or personal data. Do not test against accounts or infrastructure you do not own or have permission to assess.
 
-When using Auto-FreeCF:
+## In scope
 
-1. **Never share your credentials** - Keep your Cloudflare and Google account credentials secure
-2. **Use strong passwords** - Always use unique, strong passwords for your accounts
-3. **Enable 2FA** - Enable two-factor authentication on your Cloudflare and Google accounts
-4. **Review permissions** - Only grant the minimum necessary permissions
-5. **Keep updated** - Always use the latest version of Auto-FreeCF
-6. **Monitor accounts** - Regularly check your accounts for unauthorized activity
+- Accidental exposure or unsafe storage of credentials, tokens, mailbox data, proxy credentials, or configuration.
+- Authorization and authentication weaknesses in the local mail adapter.
+- Dependency vulnerabilities affecting the shipped Python or Node components.
+- Browser-automation behavior that leaks local secrets or bypasses an authorization boundary.
 
-### Scope
+## Out of scope
 
-Security vulnerabilities in:
-- Authentication bypass
-- Credential handling
-- Data exposure
-- Token generation
-- Browser automation exploits
-- Dependency vulnerabilities
+- Availability or policy decisions of Cloudflare, Google, Supabase, or other third-party services.
+- Rate limits, anti-abuse challenges, and ordinary user configuration errors.
+- Reports without a reproducible security impact.
 
-### Out of Scope
+## Maintainer response target
 
-- Cloudflare service issues
-- Google account issues
-- Third-party service outages
-- User error or misconfiguration
-
----
-
-Thank you for helping keep Auto-FreeCF secure! 🛡️
+Maintainers aim to acknowledge a report within 48 hours, provide a status update within 7 days, and coordinate disclosure after a fix is available. These are targets, not a service-level guarantee.

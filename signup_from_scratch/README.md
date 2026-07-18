@@ -63,6 +63,8 @@ Alur singkat di `signup_flow.py`:
 - Windows / Linux / macOS (Linux VPS: disarankan Xvfb jika headless tanpa display)
 - Mail adapter running **atau** mail API kompatibel
 
+`mail-adapter/config.example.json` hanya template referensi. Saat ini adapter membaca `API_BASE`, `TMK_KEY`, dan `PORT` dari environment; jangan menyimpan key nyata di file konfigurasi atau dokumentasi.
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -176,6 +178,8 @@ Jangan commit:
 - proxy credentials, mailbox JWT, `cfut_` tokens
 
 Treat `results.json` sebagai secret store lokal.
+
+Output juga dapat memuat password dan JWT mailbox, bukan hanya token API. Jangan unggah atau commit output tersebut. Lihat [`../docs/PROJECT_GUIDE.md`](../docs/PROJECT_GUIDE.md) untuk kontrak adapter, batas pengujian, dan aturan handoff agent.
 
 ---
 
