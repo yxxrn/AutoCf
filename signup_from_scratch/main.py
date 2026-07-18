@@ -27,6 +27,7 @@ import argparse
 import asyncio
 import random
 import sys
+from typing import Optional
 from pathlib import Path
 
 import nodriver as uc
@@ -40,6 +41,7 @@ from src.email_verifier import verify_cloudflare_email
 from src.token_creator import create_token, create_token_api
 from src.token_validator import validate_token
 from src.live_dashboard import DashboardState, LiveDashboard
+from src.rate_limit_guard import RateLimitGuard, RateLimitError
 from src.utils import (
     generate_password,
     generate_username,
@@ -66,6 +68,10 @@ def parse_args():
     parser.add_argument(
         "--proxy", "-p", type=str, default=None,
         help="Proxy URL (http://user:pass@host:port)"
+    )
+    parser.add_argument(
+        "--proxy-file", type=str, default=None,
+        help="File with one proxy per line. Guard will rotate automatically on rate limit."
     )
     parser.add_argument(
         "--output", "-o", type=str, default=None,
@@ -286,6 +292,20 @@ async def main():
     num_accounts = args.accounts
     max_retry = args.retry
 
+    # Proxy pool (one proxy per line, auto-rotates on rate limit)
+    proxy_pool: list[str] = []
+    if args.proxy_file:
+        proxy_path = Path(args.proxy_file)
+        if proxy_path.exists():
+            proxy_pool = [
+                line.strip()
+                for line in proxy_path.read_text().splitlines()
+                if line.strip() and not line.startswith("#")
+            ]
+            print(f"  Proxy pool: {len(proxy_pool)} proxies loaded from {args.proxy_file}")
+    elif proxy:
+        proxy_pool = [proxy]
+
     # Validate-only mode
     if args.validate_only:
         if not args.token or not args.account_id:
@@ -322,10 +342,21 @@ async def main():
 
     dashboard_state = DashboardState(total=num_accounts, workers=workers)
 
-    async def run_one(worker_id: int, index: int) -> dict:
+    async def run_one(worker_id: int, index: int, proxy: str) -> dict:
+        """
+        Create one account. Takes proxy as argument so rotation happens at
+        worker level, not at the outer loop level (which would re-create
+        the queue state).
+        """
         dashboard_state.update(worker_id, "signup", "Starting signup", index=index)
         result: dict = {"status": "error", "error": "not_started"}
+        guard = RateLimitGuard(proxy=proxy)
         success = False
+
+        if guard.is_blacklisted():
+            dashboard_state.update(worker_id, "failed", "IP blacklisted, skipping", email="", index=index)
+            return {"status": "error", "error": "ip_blacklisted", "proxy": proxy, "created_at": timestamp()}
+
         for attempt in range(max_retry):
             if attempt > 0:
                 dashboard_state.update(worker_id, "signup", f"Retry {attempt}/{max_retry - 1}", index=index)
@@ -339,20 +370,40 @@ async def main():
             if result.get("email"):
                 dashboard_state.update(worker_id, "validate", result.get("status", "done"), email=result["email"], index=index)
 
+            err_str = str(result.get("error", ""))
+
+            # Success
             if result.get("status") == "full":
+                guard.record_success()
                 success = True
                 break
             if result.get("status") == "signup_only":
+                guard.record_success()
                 success = True
                 break
-            if any(
-                marker in str(result.get("error", "")).lower()
-                for marker in ("rate", "unable", "connection closed", "no close frame")
-            ):
-                dashboard_state.update(worker_id, "failed", "Transient issue; retry cooldown", email=result.get("email", ""), index=index)
-                await asyncio.sleep(delay)
-            else:
-                break
+
+            # Classify error
+            error_type, is_rl = RateLimitGuard.classify_error(err_str)
+
+            # Transient / rate limit → record hit + adaptive cooldown
+            if is_rl:
+                cooldown = guard.record_hit(err_str)
+                dashboard_state.update(
+                    worker_id, "failed",
+                    f"Rate limit ({error_type}), cooldown {cooldown:.0f}s",
+                    email=result.get("email", ""), index=index
+                )
+                if cooldown > 0:
+                    await guard.cooldown()
+
+                # Blacklisted? rotate proxy
+                if guard.is_blacklisted():
+                    dashboard_state.update(worker_id, "failed", "IP blacklisted, rotate proxy", email=result.get("email", ""), index=index)
+                    break
+                continue
+
+            # Fatal error → don't retry
+            break
 
         async with save_lock:
             save_result(result, output_file)
@@ -362,20 +413,34 @@ async def main():
         dashboard_state.finish(worker_id, success, format_account(result) if success else result.get("error", "unknown"))
         return result
 
-    async def worker(worker_id: int):
+    async def worker(worker_id: int, proxy: str):
+        pool_idx = proxy_pool.index(proxy) if proxy in proxy_pool else 0
         while not queue.empty():
             index = await queue.get()
             print(f"\n{'-' * 50}\n  Account {index}/{num_accounts} (Worker {worker_id})\n{'=' * 50}")
             try:
-                await run_one(worker_id, index)
+                await run_one(worker_id, index, proxy)
             finally:
                 queue.task_done()
                 if delay and not queue.empty():
                     dashboard_state.update(worker_id, "queued", f"Cooldown {delay}s")
                     await asyncio.sleep(delay)
 
+        # Rotate to next proxy in pool when worker finishes
+        if proxy_pool and pool_idx + 1 < len(proxy_pool):
+            next_proxy = proxy_pool[pool_idx + 1]
+            if not queue.empty():
+                asyncio.create_task(worker(worker_id, next_proxy))
+
     with LiveDashboard(dashboard_state, enabled=not args.no_dashboard) as live:
-        worker_tasks = [asyncio.create_task(worker(wid)) for wid in range(1, workers + 1)]
+        # Assign one proxy per worker from pool; if no pool, all use None
+        worker_proxies_list: list[Optional[str]] = (
+            [proxy_pool[i] for i in range(min(len(proxy_pool), workers))]
+            if proxy_pool else [None] * workers
+        )
+        while len(worker_proxies_list) < workers:
+            worker_proxies_list.append(None)
+        worker_tasks = [asyncio.create_task(worker(wid, worker_proxies_list[wid - 1] or "")) for wid in range(1, workers + 1)]
         while any(not task.done() for task in worker_tasks):
             live.refresh()
             await asyncio.sleep(0.5)

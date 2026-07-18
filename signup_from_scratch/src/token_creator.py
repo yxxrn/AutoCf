@@ -23,6 +23,8 @@ from typing import Any
 
 import nodriver as uc
 
+from .rate_limit_guard import RateLimitError, RateLimitGuard
+
 
 WORKERS_AI_READ_ID = "a92d2450e05d4e7bb7d0a64968f83d11"
 WORKERS_AI_WRITE_ID = "bacc64e0f6c34fc0883a1223f938a104"
@@ -188,14 +190,11 @@ async def create_token_api(
                 )
         except Exception:
             pass
+        if status == 429:
+            raise RateLimitError("api_429", f"HTTP {status}: {snippet}", cooldown=0)
         if status == 403 and "Attention Required" in body_text:
-            return TokenResult(
-                False,
-                token_name=token_name,
-                error="api_waf_403_attention_required",
-                method="api",
-                raw={"status": status, "body": snippet},
-            )
+            raise RateLimitError("api_403_waf", body_text[:200], cooldown=0)
+        # Non-rate-limit API errors → return failed TokenResult (no cooldown)
         return TokenResult(
             False,
             token_name=token_name,

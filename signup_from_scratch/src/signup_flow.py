@@ -17,6 +17,7 @@ import nodriver as uc
 
 from .turnstile_bypass import verify_cf, is_turnstile_present
 from .humanize import human_click, human_type, human_scroll, pause as human_pause, read_pause
+from .rate_limit_guard import RateLimitError, RateLimitGuard
 
 
 CLOUDFLARE_SIGNUP_URL = "https://dash.cloudflare.com/sign-up"
@@ -162,8 +163,12 @@ async def signup(
     error_msgs = await page.evaluate("""
         Array.from(document.querySelectorAll('p, [role="alert"]'))
             .map(e => e.textContent.trim())
-            .filter(t => t.includes('unable') || t.includes('limit') || t.includes('Incorrect'))
+            .filter(t => t.includes('unable') || t.includes('limit') || t.includes('Incorrect') || t.includes('try again') || t.includes('banned'))
     """)
-    error = error_msgs if error_msgs else f"Redirect failed: {url[:80]}"
+    raw_error = error_msgs if error_msgs else f"Redirect failed: {url[:80]}"
 
-    return SignupResult(False, email=email, error=str(error))
+    # Classify: rate limit → raise, fatal → return failed
+    error_type, is_rl = RateLimitGuard.classify_error(str(raw_error))
+    if is_rl:
+        raise RateLimitError(error_type, str(raw_error), cooldown=0)
+    return SignupResult(False, email=email, error=str(raw_error))
