@@ -153,11 +153,12 @@ async def create_account(
             f"--user-agent={random.choice(USER_AGENTS)}",
             "--disable-blink-features=AutomationControlled",
         ]
+        if proxy:
+            browser_args.append(f"--proxy-server={proxy}")
         browser = await uc.start(
             headless=headless,
             lang="en-US",
-            proxy=proxy,
-            no_sandbox=True,  # required when running as root in VPS/Xvfb
+            sandbox=False,  # required when running as root in VPS/Xvfb
             browser_args=browser_args,
         )
         own_browser = True
