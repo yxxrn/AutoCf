@@ -15,7 +15,7 @@ async def verify_cf(page, timeout: float = 60.0) -> str:
     Note: nodriver's page.verify_cf() does not accept a timeout kwarg;
     ``timeout`` is reserved for future wrapper logic / call-site clarity.
     """
-    result = await page.verify_cf()
+    result = await page.verify_cf()  # nodriver internal timeout ~60s
     token = result or ""
     if not token:
         raise RuntimeError("verify_cf returned empty Turnstile token")
