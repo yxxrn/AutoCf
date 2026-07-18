@@ -157,7 +157,7 @@ async def create_account(
             headless=headless,
             lang="en-US",
             proxy=proxy,
-            sandbox=False,  # required when running as root in VPS/Xvfb
+            no_sandbox=True,  # required when running as root in VPS/Xvfb
             browser_args=browser_args,
         )
         own_browser = True
